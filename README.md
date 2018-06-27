@@ -14,7 +14,7 @@ Run tensorboard (e.g. `tensorboard --logdir=tensorboard_output/`) to view the mo
 
 To obtain recommendations for selected users:
 
-`python3 main.py --recommend --characteristics "data/test_user_book.csv"`
+`python3 main.py --recommend --characteristics "data/test_user_char.csv"`
 
 For further descriptions of command line arguments type `python main.py --help`.
 

@@ -1,9 +1,7 @@
 import numpy as np
 import tensorflow as tf
-import pandas as pd
 
-from sklearn.metrics import accuracy_score
-
+from core import common as com
 from core import helpers as hlp
 
 
@@ -92,10 +90,22 @@ def train_network(num_epochs, train_books, test_books, train_chars, test_chars, 
 
 
 def recommend_with_network(model_path, user_chars):
-    saver = tf.train.Saver()
+
+    ## Declare placeholders and create computation graph
+    x = tf.placeholder(tf.float32, shape=[None, 10], name="input_characteristics")
+    y_out = create_simple_network(x)
+    y_ = tf.placeholder(tf.float32, shape=[None, 1000], name="known_books")
+
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver()
         saver.restore(sess, model_path)
+        chars_matrix = user_chars.as_matrix()[:, 1:]
+        results = sess.run(y_out, feed_dict={x:chars_matrix})
+        books = list(map(com.top10, results))
+        print("user, recommended book numbers")
+        for idx, book in enumerate(books):
+            print(user_chars.users[idx], book)
 
 
 def main():
