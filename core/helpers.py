@@ -14,16 +14,20 @@ def interpret_command_line_arguments():
         help='Path to CSV file containing matrix of books liked by each user.'
     )
     parser.add_argument(
-        '-s', '--seed', type=int, default=42,
+        '-s', '--seed', type=int, default=43,
         help='Random seed to be used for this run.'
     )
     parser.add_argument(
-        '-s', '--test-set-length', type=int, default=0,
+        '-l', '--test-set-length', type=int, default=0,
         help='Number of users to be used for the test set while training.'
     )
     parser.add_argument(
-        '-e', '--total-epochs', type=int, default=20,
+        '-e', '--epochs', type=int, default=20,
         help='Number of epochs for which the network will be traind.'
+    )
+    parser.add_argument(
+        '-m', '--model-file', type=str, default="./trained_model",
+        help='Path to file where the trained model will be saved or loaded from.'
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
@@ -59,7 +63,8 @@ def create_training_and_testing_sets(user_chars, user_books, test_set_length):
     test_books = user_books[num_users - test_set_length:]
     train_chars = user_chars[0: len(train_books)]
     test_chars = user_chars[len(train_books): len(train_books) + len(test_books)]
-    return train_books, test_books, train_chars, test_chars
+    return train_books.as_matrix()[:, 1:], test_books.as_matrix()[:, 1:], \
+           train_chars.as_matrix()[:, 1:], test_chars.as_matrix()[:, 1:]
 
 
 def attach_summaries_(var, name="summaries"):

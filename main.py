@@ -8,7 +8,7 @@ from core import helpers as hlp
 
 
 DIR_TENSORBOARD_OUTPUT = "tensorboard_output"
-TENSORBOARD_REPORT_EPOCH_FREQUENCY = 10
+TENSORBOARD_REPORT_EPOCH_FREQUENCY = 100
 
 
 def weight_variable(shape, name="W"):
@@ -33,22 +33,24 @@ def create_dense_layer(input, num_inputs, num_outputs, name="dense"):
         return tf.nn.sigmoid(tf.matmul(input, W) + b)
 
 
-def loss_cross_entropy(classification_labels, network_output):
+def loss_function(classification_labels, network_output):
     loss = tf.reduce_mean(
-        tf.nn.softmax_cross_entropy_with_logits(labels=classification_labels, logits=network_output)
+        tf.nn.sigmoid_cross_entropy_with_logits(labels=classification_labels, logits=network_output)
     )
     return loss
 
 
 def create_simple_network(input, num_inputs=10, num_outputs=1000, name="single-layer-network"):
     with tf.variable_scope(name):
-        dense = create_dense_layer(input, num_inputs, num_outputs, name="1-dense")
-        return dense
+        dense1 = create_dense_layer(input, num_inputs, 100, name="1-dense")
+        dense_final = create_dense_layer(dense1, 100, num_outputs, name="final-dense")
+        return dense_final
 
 
-def train_network(num_epochs, train_books, test_books, train_chars, test_chars,
+def train_network(num_epochs, train_books, test_books, train_chars, test_chars, model_path,
                   tensorboard_output=DIR_TENSORBOARD_OUTPUT,
                   summary_frequency=TENSORBOARD_REPORT_EPOCH_FREQUENCY):
+
     ## Declare placeholders and create computation graph
     x = tf.placeholder(tf.float32, shape=[None, 10], name="input_characteristics")
     y_out = create_simple_network(x)
@@ -56,13 +58,11 @@ def train_network(num_epochs, train_books, test_books, train_chars, test_chars,
 
     ## Create loss calculation operation and train operation
     with tf.name_scope("train"):
-        loss = loss_cross_entropy(y_, y_out)
+        loss = loss_function(y_, y_out)
         train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
+        op_summary_loss = tf.summary.scalar('loss', loss)
 
-    with tf.name_scope("accuracy"):
-        op_accuracy = tf.metrics.accuracy(y_, y_out)
-        op_summary_accuracy = tf.summary.scalar('accuracy', op_accuracy)
-
+    saver = tf.train.Saver()
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         ## Initialise summary writer with graph used in the current session
@@ -71,25 +71,31 @@ def train_network(num_epochs, train_books, test_books, train_chars, test_chars,
             train_step.run(feed_dict={x: train_chars, y_: train_books})
 
             ## Write tensorboard report data and console output
-            if epoch % TENSORBOARD_REPORT_EPOCH_FREQUENCY == 0:
+            if epoch % summary_frequency == 0:
                 # Rather than running and adding all the summaries one at a time; merge, run and add in one go
                 report_dict = {x: train_chars, y_: train_books}
                 writer.add_summary(tf.summary.merge_all().eval(feed_dict=report_dict), epoch)
                 # Output accuracy to console
-                train_accuracy = op_accuracy.eval(feed_dict={x: train_chars, y_: train_books})
-                print('epoch ' + epoch + ', accuracy on training data ' + train_accuracy)
-                test_accuracy = op_accuracy.eval(feed_dict={x: test_chars, y_: test_books})
-                print('epoch ' + epoch + ', accuracy on training data ' + test_accuracy)
+                train_loss = loss.eval(feed_dict={x: train_chars, y_: train_books})
+                test_loss = loss.eval(feed_dict={x: test_chars, y_: test_books})
+                print('epoch ' + str(epoch) + ', loss on training data ' + str(train_loss) +
+                      ', and on test data ' + str(test_loss))
 
         ## Evaluate network accuracy on the test data set
-        print("Final accuracy on test data set: " +
-              op_accuracy.eval(feed_dict={x: test_chars, y_: test_books}))
-        
+        print('Final loss on test data set: ' +
+              str(loss.eval(feed_dict={x: test_chars, y_: test_books})))
+
+        print('Saving trained model to ' + model_path)
+        saver.save(sess, model_path)
+
         return y_out, writer
 
 
-
-
+def recommend_with_network(model_path, user_chars):
+    saver = tf.train.Saver()
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        saver.restore(sess, model_path)
 
 
 def main():
@@ -107,27 +113,12 @@ def main():
         train_books, test_books, train_chars, test_chars = hlp.create_training_and_testing_sets(
             user_chars, user_books, args.test_set_length
         )
-
-
-
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        ## Initialise summary writer with graph used in the current session
-        writer = tf.summary.FileWriter(tensorboard_output, sess.graph)
-        for epoch in range(num_cnn_epochs):
-            batch = training_data.next_batch(batch_size_cnn)
-
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        ## Initialise summary writer with graph used in the current session
-        writer = tf.summary.FileWriter(tensorboard_output, sess.graph)
-        for epoch in range(num_cnn_epochs):
-            batch = training_data.next_batch(batch_size_cnn)
-
-
+        train_network(args.epochs, train_books, test_books, train_chars, test_chars, model_path=args.model_file)
 
     elif args.recommend:
         print('Generating recommendations for users from ' + args.characteristics)
+        user_chars = hlp.read_csv_user_chars(args.characteristics)
+        recommend_with_network(args.model_file, user_chars)
 
 if __name__ == "__main__":
     main()
